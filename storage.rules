@@ -1,0 +1,53 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Profile photos
+    match /profiles/{userId}.jpg {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
+    }
+    match /profiles/{userId}.jpeg {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
+    }
+    match /profiles/{userId}.png {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
+    }
+
+    // Group circle avatar photos
+    match /groups/{groupId}.jpg {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    match /groups/{groupId}.jpeg {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    match /groups/{groupId}.png {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // Direct 1-to-1 Chat media attachments
+    match /chats/{chatId}/{messageFile} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // Group media attachments
+    match /groups/{groupId}/media/{messageFile} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+  }
+}

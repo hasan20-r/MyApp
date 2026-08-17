@@ -1,0 +1,132 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isGroupActiveMember(groupId) {
+      return isAuthenticated() && 
+        request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.activeMemberIds;
+    }
+
+    function isGroupAdmin(groupId) {
+      return isAuthenticated() && (
+        get(/databases/$(database)/documents/groups/$(groupId)).data.createdBy == request.auth.uid ||
+        get(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid)).data.role == 'admin'
+      );
+    }
+
+    function isGroupModeratorOrAdmin(groupId) {
+      return isAuthenticated() && (
+        isGroupAdmin(groupId) ||
+        get(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid)).data.role == 'moderator'
+      );
+    }
+
+    // User Profiles
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if false;
+
+      // Subcollections
+      match /followers/{followerId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && (request.auth.uid == followerId || isOwner(userId));
+      }
+
+      match /following/{followingId} {
+        allow read: if isAuthenticated();
+        allow write: if isOwner(userId);
+      }
+
+      match /friends/{friendId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && (request.auth.uid == friendId || isOwner(userId));
+      }
+
+      match /blocks/{blockedId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /notifications/{notificationId} {
+        allow read, update, delete: if isOwner(userId);
+        allow create: if isAuthenticated();
+      }
+    }
+
+    // Reports
+    match /reports/{reportId} {
+      allow create: if isAuthenticated() && request.resource.data.reportedBy == request.auth.uid;
+      allow read, update, delete: if false;
+    }
+
+    // 1-to-1 Chats
+    match /chats/{chatId} {
+      allow read: if isAuthenticated() && (request.auth.uid in resource.data.participants);
+      allow create: if isAuthenticated() && (request.auth.uid in request.resource.data.participants);
+      allow update: if isAuthenticated() && (request.auth.uid in resource.data.participants);
+
+      match /messages/{messageId} {
+        allow read: if isAuthenticated() && 
+          (request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants);
+        allow create: if isAuthenticated() && 
+          (request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants) &&
+          request.resource.data.senderId == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }
+
+    // Group Chats
+    match /groups/{groupId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAuthenticated() && (
+        request.auth.uid in resource.data.activeMemberIds ||
+        isGroupAdmin(groupId)
+      );
+      allow delete: if isGroupAdmin(groupId);
+
+      // Group Members
+      match /members/{memberId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated();
+        allow update: if isAuthenticated() && (
+          request.auth.uid == memberId || 
+          isGroupModeratorOrAdmin(groupId)
+        );
+        allow delete: if isGroupAdmin(groupId);
+      }
+
+      // Group Messages
+      match /messages/{messageId} {
+        allow read: if isGroupActiveMember(groupId);
+        allow create: if isGroupActiveMember(groupId) && 
+          request.resource.data.senderId == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }
+
+    // Group Invitations
+    match /group_invitations/{invitationId} {
+      allow read: if isAuthenticated() && (
+        resource.data.invitedUid == request.auth.uid ||
+        resource.data.inviterUid == request.auth.uid
+      );
+      allow create: if isAuthenticated() && request.resource.data.inviterUid == request.auth.uid;
+      allow update: if isAuthenticated() && (
+        resource.data.invitedUid == request.auth.uid ||
+        resource.data.inviterUid == request.auth.uid
+      );
+      allow delete: if false;
+    }
+  }
+}

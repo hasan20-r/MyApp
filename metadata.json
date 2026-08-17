@@ -1,0 +1,6 @@
+{
+  "name": "Hey Fans",
+  "description": "Hey Fans — Social Messaging Flutter & Firebase application architecture and codebase.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
